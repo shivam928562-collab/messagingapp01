@@ -17,9 +17,13 @@ export function MinimalAuthPage() {
 		signInWithPopup(auth, provider)
 			.then(async (result) => {
 				try {
+					const token = await result.user.getIdToken();
 					await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:9000'}/users`, {
 						method: 'POST',
-						headers: { 'Content-Type': 'application/json' },
+						headers: { 
+							'Content-Type': 'application/json',
+							'Authorization': `Bearer ${token}`
+						},
 						body: JSON.stringify({
 							uid: result.user.uid,
 							name: result.user.displayName,

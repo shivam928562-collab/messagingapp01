@@ -4,31 +4,46 @@ import { DonutLarge, Chat as ChatIcon, MoreVert, SearchOutlined } from '@mui/ico
 import Sidebarchat from './Sidebarchat';
 import { useStateValue } from '../StateProvider';
 import { socket } from '../App';
+import { auth } from '../firebase';
 
 const Sidebar = () => {
     const [{ user }] = useStateValue();
     const [users, setUsers] = useState([]);
     const [onlineUsers, setOnlineUsers] = useState([]);
     const [lastMessages, setLastMessages] = useState({});
+    const [searchQuery, setSearchQuery] = useState('');
 
     useEffect(() => {
-        if (user) {
-            // Fetch registered users
-            fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:9000'}/users`)
-                .then(res => res.json())
-                .then(data => {
-                    setUsers(data.filter(u => u.uid !== user.uid));
-                })
-                .catch(err => console.error(err));
-            
-            // Fetch last messages
-            fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:9000'}/messages/last/${user.uid}`)
-                .then(res => res.json())
-                .then(data => {
-                    setLastMessages(data);
-                })
-                .catch(err => console.error(err));
-        }
+        const fetchData = async () => {
+            if (user && auth.currentUser) {
+                try {
+                    const token = await auth.currentUser.getIdToken();
+                    
+                    // Fetch registered users
+                    fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:9000'}/users`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    })
+                        .then(res => res.json())
+                        .then(data => {
+                            setUsers(data.filter(u => u.uid !== user.uid));
+                        })
+                        .catch(err => console.error(err));
+                    
+                    // Fetch last messages
+                    fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:9000'}/messages/last/${user.uid}`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    })
+                        .then(res => res.json())
+                        .then(data => {
+                            setLastMessages(data);
+                        })
+                        .catch(err => console.error(err));
+                } catch (error) {
+                    console.error("Error fetching token", error);
+                }
+            }
+        };
+        fetchData();
     }, [user]);
 
     useEffect(() => {
@@ -62,6 +77,8 @@ const Sidebar = () => {
                 <div className="flex items-center bg-slate-100 rounded-full px-4 py-2 focus-within:ring-2 focus-within:ring-blue-100 focus-within:bg-white transition-all">
                     <SearchOutlined className="text-slate-400" />
                     <input 
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
                         placeholder="Search or start new chat" 
                         type="text" 
                         className="bg-transparent outline-none border-none flex-1 ml-3 text-[15px] placeholder-slate-400 text-slate-700" 
@@ -71,7 +88,10 @@ const Sidebar = () => {
 
             {/* Sidebar Chats (Direct Messages) */}
             <div className="flex-1 overflow-y-auto overflow-x-hidden bg-slate-50/30 custom-scrollbar p-2 space-y-1">
-                {users.map(u => {
+                {users.filter(u => 
+                    u.name?.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                    u.email?.toLowerCase().includes(searchQuery.toLowerCase())
+                ).map(u => {
                     const roomId = [user.uid, u.uid].sort().join('_');
                     const lastMsg = lastMessages[roomId];
                     return (

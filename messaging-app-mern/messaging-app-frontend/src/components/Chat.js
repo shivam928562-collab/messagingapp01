@@ -6,6 +6,7 @@ import { socket } from '../App';
 import { useStateValue } from '../StateProvider';
 import EmojiPicker from 'emoji-picker-react';
 import { formatTimestamp } from '../utils';
+import { auth } from '../firebase';
 
 const Chat = () => {
     const { roomId } = useParams();
@@ -24,17 +25,26 @@ const Chat = () => {
     }, [messages]);
 
     useEffect(() => {
-        if (roomId) {
-            // Fetch Messages for this specific 1-on-1 chat
-            fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:9000'}/messages/${roomId}`)
-                .then(res => res.json())
-                .then(data => {
-                    if (data.success) {
-                        setMessages(data.messages);
-                    }
-                })
-                .catch(err => console.error(err));
-        }
+        const fetchMessages = async () => {
+            if (roomId && auth.currentUser) {
+                try {
+                    const token = await auth.currentUser.getIdToken();
+                    fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:9000'}/messages/${roomId}`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    })
+                        .then(res => res.json())
+                        .then(data => {
+                            if (data.success) {
+                                setMessages(data.messages);
+                            }
+                        })
+                        .catch(err => console.error(err));
+                } catch (error) {
+                    console.error("Error getting token", error);
+                }
+            }
+        };
+        fetchMessages();
     }, [roomId]);
 
     useEffect(() => {
@@ -60,28 +70,37 @@ const Chat = () => {
     const sendMessage = async (e) => {
         e.preventDefault();
 
-        if (!input.trim()) return; // Don't send empty messages
+        if (!input.trim() || !auth.currentUser) return; // Don't send empty messages
 
-        await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:9000'}/messages`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                text: input,
-                sender: user?.displayName || 'Unknown User', 
-                roomId: roomId,
-            })
-        });
+        try {
+            const token = await auth.currentUser.getIdToken();
+            await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:9000'}/messages`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                    text: input,
+                    sender: user?.displayName || 'Unknown User', 
+                    roomId: roomId,
+                })
+            });
 
-        setInput(""); 
-        setShowEmojiPicker(false); 
+            setInput(""); 
+            setShowEmojiPicker(false); 
+        } catch (error) {
+            console.error("Error sending message", error);
+        }
     };
 
     const deleteMessage = async (id) => {
+        if (!auth.currentUser) return;
         try {
+            const token = await auth.currentUser.getIdToken();
             await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:9000'}/messages/${id}`, {
                 method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
             });
         } catch (error) {
             console.error("Error deleting message:", error);

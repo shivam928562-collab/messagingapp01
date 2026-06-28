@@ -11,6 +11,8 @@ Designed with a sleek, minimalistic UI inspired by Telegram and iMessage.
 * **Last Message Previews:** The sidebar instantly shows the most recent message you exchanged with every contact.
 * **Smart Timestamps:** Beautifully formatted message timestamps (e.g., `10:45 AM` for today, `Yesterday` for older messages).
 * **Google Authentication:** Secure and seamless login powered by Firebase Auth.
+* **Secure API:** Express backend locked down with Firebase Admin SDK token verification.
+* **Contact Search:** Quickly filter and find users in the sidebar.
 * **Modern UI:** Built from the ground up using Tailwind CSS for a premium, responsive design.
 
 ## 🛠️ Tech Stack
@@ -34,6 +36,7 @@ npm install
 ```
 * Create a `.env` file in the backend folder and add your MongoDB connection string:
   `MONGO_URI=mongodb+srv://<user>:<password>@cluster...`
+* Download your `serviceAccountKey.json` from the Firebase Console (Project Settings > Service Accounts) and place it in the backend folder. For production, set the `FIREBASE_SERVICE_ACCOUNT` environment variable instead.
 * Start the server:
 ```bash
 npm start

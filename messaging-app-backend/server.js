@@ -7,8 +7,47 @@ import User from './dbUsers.js';
 import dns from 'dns';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
+import { initializeApp, cert } from 'firebase-admin/app';
+import { getAuth } from 'firebase-admin/auth';
+import fs from 'fs';
 
 dotenv.config();
+
+// Initialize Firebase Admin
+let serviceAccount;
+if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+    serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+} else {
+    try {
+        serviceAccount = JSON.parse(fs.readFileSync('./serviceAccountKey.json', 'utf-8'));
+    } catch (e) {
+        console.error("Could not load serviceAccountKey.json. Please ensure it exists.");
+    }
+}
+if (serviceAccount) {
+    initializeApp({
+      credential: cert(serviceAccount)
+    });
+}
+
+// Security Middleware to verify tokens
+const verifyToken = async (req, res, next) => {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return res.status(401).send('Unauthorized: No token provided');
+    }
+
+    const idToken = authHeader.split('Bearer ')[1];
+    
+    try {
+        const decodedToken = await getAuth().verifyIdToken(idToken);
+        req.user = decodedToken; // Attach user info to the request
+        next(); // Token is valid, proceed to the API endpoint
+    } catch (error) {
+        console.error('Error verifying token:', error);
+        res.status(401).send('Unauthorized: Invalid token');
+    }
+};
 
 // App config
 const app = express();
@@ -66,7 +105,7 @@ io.on('connection', (socket) => {
 // API endpoints
 app.get('/', (req, res) => res.status(200).send('Hello the webdev'));
 
-app.post('/messages', async (req, res) => {
+app.post('/messages', verifyToken, async (req, res) => {
     const dbMessage = req.body;
 
     try {
@@ -101,7 +140,7 @@ app.get('/test-emit', (req, res) => {
 });
 
 // User Endpoints
-app.post('/users', async (req, res) => {
+app.post('/users', verifyToken, async (req, res) => {
     try {
         const { uid, name, email, photoURL } = req.body;
         // Upsert user based on uid
@@ -116,7 +155,7 @@ app.post('/users', async (req, res) => {
     }
 });
 
-app.get('/users', async (req, res) => {
+app.get('/users', verifyToken, async (req, res) => {
     try {
         const data = await User.find();
         res.status(200).send(data);
@@ -125,7 +164,7 @@ app.get('/users', async (req, res) => {
     }
 });
 
-app.get('/messages/:roomId', async (req, res) => {
+app.get('/messages/:roomId', verifyToken, async (req, res) => {
     try {
         const data = await Message.find({ roomId: req.params.roomId });
         res.status(200).json({ success: true, messages: data });
@@ -135,7 +174,7 @@ app.get('/messages/:roomId', async (req, res) => {
 });
 
 // Get Last Messages for all rooms a user is part of
-app.get('/messages/last/:uid', async (req, res) => {
+app.get('/messages/last/:uid', verifyToken, async (req, res) => {
     try {
         const { uid } = req.params;
         // Find messages where the roomId contains the given uid
@@ -162,7 +201,7 @@ app.get('/messages/last/:uid', async (req, res) => {
     }
 });
 
-app.delete('/messages/:id', async (req, res) => {
+app.delete('/messages/:id', verifyToken, async (req, res) => {
     try {
         const { id } = req.params;
         const deletedMessage = await Message.findByIdAndDelete(id);
